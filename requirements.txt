@@ -1,0 +1,7 @@
+streamlit
+python-dotenv
+openai
+docxtpl
+soundfile
+numpy
+streamlit_audiorecorder

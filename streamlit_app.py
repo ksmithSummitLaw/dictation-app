@@ -3,14 +3,16 @@
 import os
 import io
 import streamlit as st
-from dotenv import load_dotenv
+import openai
 from docxtpl import DocxTemplate
-from openai import OpenAI
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
-load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-st.set_page_config(page_title="Live Dictate a Letter", layout="wide")
+# Pull your key from Streamlit Cloud Secrets
+# In your Streamlit Cloud app settings → Secrets, add:
+#    OPENAI_API_KEY="sk-…your-new-key…"
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+st.set_page_config(page_title="Live Dictate a Letter (DOCX)", layout="wide")
 
 # ─── UI ─────────────────────────────────────────────────────────────────────────
 st.title("📄 Live Dictate Your Letter (DOCX)")
@@ -25,25 +27,27 @@ if uploaded_audio:
 
     # 3) Once happy, click to generate
     if st.button("Generate .docx Letter"):
-        # 4) Transcribe via Whisper (v1.x Speech-to-Text API)
+        # 4) Transcribe via Whisper
         with st.spinner("📝 Transcribing via Whisper…"):
             wav_buf = io.BytesIO(audio_bytes)
             wav_buf.name = uploaded_audio.name or "speech.wav"
-            transcript_resp = client.audio.transcriptions.create(
+            transcript_resp = openai.Audio.transcribe(
                 model="whisper-1",
                 file=wav_buf
             )
-            transcript = transcript_resp.text
+            transcript = transcript_resp["text"]
 
         st.markdown(f"**Transcript:**\n> {transcript}")
 
-        # 5) Draft the letter with GPT (v1.x Chat Completions API)
+        # 5) Draft the letter with GPT
         with st.spinner("🤖 Drafting letter with GPT…"):
             prompt = (
-                "You are a legal assistant. Draft a formal letter based on this dictation; do not output a place holder for the senders name and return address - they are included on the letterhead:\n\n"
+                "You are a legal assistant. Draft a formal letter based on this dictation; "
+                "do not output a placeholder for the sender’s name and return address—"
+                "they are included on the letterhead:\n\n"
                 f"{transcript}"
             )
-            chat_resp = client.chat.completions.create(
+            chat_resp = openai.ChatCompletion.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You draft formal business/legal letters."},
@@ -51,7 +55,7 @@ if uploaded_audio:
                 ],
                 temperature=0.2,
             )
-            letter_body = chat_resp.choices[0].message.content.strip()  # :contentReference[oaicite:0]{index=0}
+            letter_body = chat_resp.choices[0].message.content.strip()
 
         st.markdown(f"**Letter Preview:**\n\n{letter_body}")
 

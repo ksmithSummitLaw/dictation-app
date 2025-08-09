@@ -3,14 +3,13 @@
 import os
 import io
 import streamlit as st
-import openai
 from docxtpl import DocxTemplate
+from openai import OpenAI
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
-# Pull your key from Streamlit Cloud Secrets
-# In your Streamlit Cloud app settings → Secrets, add:
-#    OPENAI_API_KEY="sk-…your-new-key…"
-openai.api_key = st.secrets["OPENAI_API_KEY"]
+# Put this in Streamlit Cloud → Settings → Secrets:
+# OPENAI_API_KEY="sk-…"
+client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 st.set_page_config(page_title="Live Dictate a Letter (DOCX)", layout="wide")
 
@@ -27,19 +26,21 @@ if uploaded_audio:
 
     # 3) Once happy, click to generate
     if st.button("Generate .docx Letter"):
-        # 4) Transcribe via Whisper
+        # 4) Transcribe via Whisper (v1 SDK)
         with st.spinner("📝 Transcribing via Whisper…"):
             wav_buf = io.BytesIO(audio_bytes)
+            # OpenAI needs a filename on file-like objects
             wav_buf.name = uploaded_audio.name or "speech.wav"
-            transcript_resp = openai.Audio.transcribe(
-                model="whisper-1",
+
+            transcript_resp = client.audio.transcriptions.create(
+                model="whisper-1",   # or "gpt-4o-mini-transcribe" if enabled
                 file=wav_buf
             )
-            transcript = transcript_resp["text"]
+            transcript = transcript_resp.text
 
-        st.markdown(f"**Transcript:**\n> {transcript}")
+        st.markdown(f"**Transcript:**\n\n> {transcript}")
 
-        # 5) Draft the letter with GPT
+        # 5) Draft the letter with GPT (v1 SDK)
         with st.spinner("🤖 Drafting letter with GPT…"):
             prompt = (
                 "You are a legal assistant. Draft a formal letter based on this dictation; "
@@ -47,11 +48,11 @@ if uploaded_audio:
                 "they are included on the letterhead:\n\n"
                 f"{transcript}"
             )
-            chat_resp = openai.ChatCompletion.create(
+            chat_resp = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You draft formal business/legal letters."},
-                    {"role": "user",   "content": prompt},
+                    {"role": "user", "content": prompt},
                 ],
                 temperature=0.2,
             )
@@ -75,8 +76,5 @@ if uploaded_audio:
                 label="Download Letter (.docx)",
                 data=out_buf,
                 file_name="generated_letter.docx",
-                mime=(
-                    "application/vnd.openxmlformats-"
-                    "officedocument.wordprocessingml.document"
-                ),
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             )

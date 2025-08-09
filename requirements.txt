@@ -1,6 +1,6 @@
 streamlit
 python-dotenv
-openai=1.40
+openai
 docxtpl
 soundfile
 numpy
